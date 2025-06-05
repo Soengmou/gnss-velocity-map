@@ -93,7 +93,7 @@
           });
 
           // 添加箭头标记
-          L.marker([point.lat, point.lon], { icon: arrowIcon }).addTo(map)
+          L.marker([point.lon, point.lat], { icon: arrowIcon }).addTo(map)
             .bindPopup(`纬度: ${point.lat}<br>经度: ${point.lon}<br>速度大小: ${magnitude.toFixed(3)}`);
         });
       })
