@@ -58,7 +58,7 @@
             html: arrowHtml,
           });
 
-          L.marker([point.lat, point.lon], { icon: arrowIcon })
+          L.marker([point.lon, point.lat], { icon: arrowIcon })
             .addTo(map)
             .bindPopup(`Vx: ${point.vx}, Vy: ${point.vy}`);
         });
