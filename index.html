@@ -18,11 +18,27 @@
       font-size: 14px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
+    #downloadBtn {
+      position: absolute;
+      top: 50px; left: 10px;
+      padding: 6px 12px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      z-index: 999;
+    }
+    #downloadBtn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div class="info-box" id="info">📌 双击或点击起点闭合多边形完成框选</div>
+  <button id="downloadBtn" disabled>📥 下载选中数据</button>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
@@ -63,6 +79,7 @@
     map.addControl(drawControl);
 
     let velocityData = [];
+    let selectedData = [];
 
     fetch("data/velocity.json")
       .then((response) => response.json())
@@ -119,18 +136,32 @@
 
     map.on(L.Draw.Event.CREATED, function (event) {
       const layer = event.layer;
-      drawnItems.clearLayers(); // 清除之前画的
+      drawnItems.clearLayers();
       drawnItems.addLayer(layer);
 
       const polygon = layer.getLatLngs()[0].map(p => [p.lng, p.lat]);
 
-      const selected = velocityData.filter((pt) =>
+      selectedData = velocityData.filter((pt) =>
         pointInPolygon([pt.lon, pt.lat], polygon)
       );
 
-      console.log("✅ 选中了", selected.length, "个点");
-      console.log("📦 选中点数据：", selected);
-      alert(`✅ 选中了 ${selected.length} 个点，请查看控制台获取数据`);
+      console.log("✅ 选中了", selectedData.length, "个点");
+      console.log("📦 选中点数据：", selectedData);
+
+      alert(`✅ 选中了 ${selectedData.length} 个点，可点击按钮下载 JSON`);
+      document.getElementById("downloadBtn").disabled = selectedData.length === 0;
+    });
+
+    document.getElementById("downloadBtn").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(selectedData, null, 2)], {
+        type: "application/json"
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "selected_velocity_data.json";
+      a.click();
+      URL.revokeObjectURL(url);
     });
   </script>
 </body>
