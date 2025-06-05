@@ -1,106 +1,46 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <title>GNSS速度矢量地图展示</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+e2F8XXKz3HkQ2NqaQoz1Y+poZoK5Rkbb6vQT8z+I="
-    crossorigin=""
-  />
-  <style>
-    #map {
-      height: 100vh;
-      width: 100vw;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
+fetch("data/velocity.json")
+  .then(res => res.json())
+  .then(data => {
+    const scale = 5; // 缩放系数，根据需要调节
 
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-oVZfNQUiGQHT4oMZoF9nxMOIQ0zEQvR3rMxy9Y3uh2E="
-    crossorigin=""
-  ></script>
+    data.forEach(point => {
+      const vx = point.vx;
+      const vy = point.vy;
+      const magnitude = Math.sqrt(vx * vx + vy * vy);
+      const angle = (Math.atan2(vy, vx) * 180) / Math.PI;
 
-  <script>
-    // 初始化地图，中心点和缩放级别根据数据调整
-    const map = L.map('map').setView([25, 93], 5);
+      const length = magnitude * scale;
 
-    // 添加OpenStreetMap底图
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '© OpenStreetMap contributors',
-    }).addTo(map);
+      const arrowHtml = `
+        <div style="
+          width: 2px;
+          height: ${length}px;
+          background: red;
+          transform: rotate(${angle}deg);
+          transform-origin: bottom center;
+          position: relative;
+          margin: 0 auto;
+        ">
+          <div style="
+            width: 0; 
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 10px solid red;
+            position: absolute;
+            bottom: 100%; 
+            left: -4px;
+          "></div>
+        </div>
+      `;
 
-    // 读取速度数据
-    fetch('data/velocity.json')
-      .then(response => {
-        if (!response.ok) {
-          throw new Error('加载数据失败: ' + response.status);
-        }
-        return response.json();
-      })
-      .then(data => {
-        console.log('加载速度数据点数量:', data.length);
-
-        const scale = 5; // 缩放因子，根据实际情况调节
-
-        data.forEach(point => {
-          const vx = point.vx;
-          const vy = point.vy;
-
-          // 计算矢量大小和方向（角度）
-          const magnitude = Math.sqrt(vx * vx + vy * vy);
-          const angle = (Math.atan2(vy, vx) * 180) / Math.PI;
-
-          // 箭头长度，根据矢量大小缩放
-          const length = magnitude * scale;
-
-          // 构造箭头HTML，箭杆和箭头（简单CSS绘制）
-          const arrowHtml = `
-            <div style="
-              width: 2px;
-              height: ${length}px;
-              background: red;
-              transform: rotate(${angle}deg);
-              transform-origin: bottom center;
-              position: relative;
-              margin: 0 auto;
-            ">
-              <div style="
-                width: 0; 
-                height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-bottom: 10px solid red;
-                position: absolute;
-                bottom: 100%; 
-                left: -4px;
-              "></div>
-            </div>
-          `;
-
-          // 创建自定义图标
-          const arrowIcon = L.divIcon({
-            className: '',
-            html: arrowHtml,
-            iconSize: [10, length + 10],  // 宽度和高度，包含箭头部分
-            iconAnchor: [5, length + 10], // 锚点设在箭杆底部中心
-          });
-
-          // 添加箭头标记
-          L.marker([point.lon, point.lat], { icon: arrowIcon }).addTo(map)
-            .bindPopup(`纬度: ${point.lat}<br>经度: ${point.lon}<br>速度大小: ${magnitude.toFixed(3)}`);
-        });
-      })
-      .catch(error => {
-        console.error('读取数据错误:', error);
-        alert('速度数据加载失败，请检查数据文件路径和格式。');
+      const arrowIcon = L.divIcon({
+        className: "",
+        html: arrowHtml,
+        iconSize: [10, length + 10],  // 宽度，高度要加上箭头尺寸
+        iconAnchor: [5, length + 10], // 底部中心点作为锚点
       });
-  </script>
-</body>
-</html>
+
+      L.marker([point.lat, point.lon], { icon: arrowIcon }).addTo(map);
+    });
+  });
