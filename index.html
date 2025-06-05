@@ -8,44 +8,21 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
     #map { height: 100vh; }
-
-    .info-box-bottom {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
+    .info-box {
+      position: absolute;
+      top: 10px; left: 10px;
       background: white;
-      padding: 12px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      padding: 8px 12px;
+      border-radius: 4px;
       z-index: 999;
       font-size: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      align-items: flex-start;
-    }
-
-    #downloadBtn {
-      padding: 6px 12px;
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
-    #downloadBtn:disabled {
-      background-color: #ccc;
-      cursor: not-allowed;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
     }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div class="info-box-bottom" id="info-box">
-    <div id="info-text">📌 双击或点击起点闭合多边形完成框选</div>
-    <button id="downloadBtn" disabled>📥 下载选中数据</button>
-  </div>
+  <div class="info-box" id="info">📌 双击或点击起点闭合多边形完成框选</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
@@ -86,18 +63,23 @@
     map.addControl(drawControl);
 
     let velocityData = [];
-    let selectedData = [];
 
     fetch("data/velocity.json")
       .then((response) => response.json())
       .then((data) => {
         velocityData = data;
 
+        // 🔺 计算最大模长
+        const maxMagnitude = Math.max(...velocityData.map(pt =>
+          Math.sqrt(pt.vx ** 2 + pt.vy ** 2)
+        ));
+
+        const arrowMaxLength = 50; // 最大箭头长度（单位：像素）
+
         velocityData.forEach((point) => {
           const angle = (Math.atan2(point.vy, point.vx) * 180) / Math.PI;
           const magnitude = Math.sqrt(point.vx ** 2 + point.vy ** 2);
-          const scale = 2;
-          const length = magnitude * scale;
+          const length = (magnitude / maxMagnitude) * arrowMaxLength;
 
           const arrowHtml = `
             <div style="
@@ -148,30 +130,13 @@
 
       const polygon = layer.getLatLngs()[0].map(p => [p.lng, p.lat]);
 
-      selectedData = velocityData.filter((pt) =>
+      const selected = velocityData.filter((pt) =>
         pointInPolygon([pt.lon, pt.lat], polygon)
       );
 
-      console.log("✅ 选中了", selectedData.length, "个点");
-      console.log("📦 选中点数据：", selectedData);
-
-      const infoText = document.getElementById("info-text");
-      const downloadBtn = document.getElementById("downloadBtn");
-
-      infoText.textContent = `✅ 选中了 ${selectedData.length} 个点，可点击按钮下载 JSON`;
-      downloadBtn.disabled = selectedData.length === 0;
-    });
-
-    document.getElementById("downloadBtn").addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(selectedData, null, 2)], {
-        type: "application/json"
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "selected_velocity_data.json";
-      a.click();
-      URL.revokeObjectURL(url);
+      console.log("✅ 选中了", selected.length, "个点");
+      console.log("📦 选中点数据：", selected);
+      alert(`✅ 选中了 ${selected.length} 个点，请查看控制台获取数据`);
     });
   </script>
 </body>
