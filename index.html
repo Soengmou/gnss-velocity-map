@@ -1,20 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GNSS Velocity Map</title>
-  <link rel="stylesheet" href="libs/leaflet.css" />
-  <link rel="stylesheet" href="libs/leaflet.draw.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    #map { height: 100vh; }
+    .arrow {
+      display: block;
+      width: 0; height: 0;
+      border: 10px solid transparent;
+      border-bottom: 20px solid red;
+      transform-origin: center;
+    }
+  </style>
 </head>
 <body>
-  <div id="map" style="height: 600px;"></div>
-  <div id="chart"></div>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // 初始化地图
+    const map = L.map('map').setView([40, 75], 4);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-  <script src="libs/leaflet.js"></script>
-  <script src="libs/leaflet.draw.js"></script>
-  <script src="libs/turf.min.js"></script>
-  <script src="libs/plotly.min.js"></script>
-  <script src="script.js"></script>
+    // 从 data/velocity.json 读取速度场数据
+    fetch('data/velocity.json')
+      .then(response => response.json())
+      .then(velocityData => {
+        velocityData.forEach(point => {
+          const angle = Math.atan2(point.vy, point.vx) * 180 / Math.PI;
+
+          const arrowIcon = L.divIcon({
+            className: '',
+            html: `<div class="arrow" style="transform: rotate(${angle}deg);"></div>`
+          });
+
+          L.marker([point.lat, point.lon], { icon: arrowIcon })
+            .addTo(map)
+            .bindPopup(`Vx: ${point.vx}, Vy: ${point.vy}`);
+        });
+      });
+  </script>
 </body>
 </html>
