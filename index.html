@@ -4,10 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GNSS Velocity Map</title>
-  <!-- Leaflet 样式 -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Leaflet.draw 样式 -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"
+  />
   <style>
     #map {
       height: 100vh;
@@ -17,53 +21,46 @@
 <body>
   <div id="map"></div>
 
-  <!-- Leaflet 脚本 -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Leaflet.draw 插件 -->
-  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
   <script>
     const map = L.map("map").setView([30, 100], 4);
+
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
-    // 添加绘图图层组
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
-    // 绘图控件
     const drawControl = new L.Control.Draw({
+      edit: {
+        featureGroup: drawnItems,
+      },
       draw: {
+        polygon: true,
+        marker: false,
         polyline: false,
         rectangle: false,
         circle: false,
-        marker: false,
         circlemarker: false,
-        polygon: {
-          allowIntersection: false,
-          showArea: true,
-        }
       },
-      edit: {
-        featureGroup: drawnItems
-      }
     });
     map.addControl(drawControl);
 
-    // 所有数据点
     let allData = [];
 
-    // 加载 JSON 数据并显示箭头
     fetch("data/velocity.json")
-      .then(response => response.json())
-      .then(velocityData => {
+      .then((response) => response.json())
+      .then((velocityData) => {
         allData = velocityData;
 
-        velocityData.forEach(point => {
+        velocityData.forEach((point) => {
           const angle = (Math.atan2(point.vy, point.vx) * 180) / Math.PI;
           const magnitude = Math.sqrt(point.vx ** 2 + point.vy ** 2);
-          const scale = 2;  // 可调节放大倍数
+
+          const scale = 2; // 调整箭头长度比例
           const length = magnitude * scale;
 
           const arrowHtml = `
@@ -86,7 +83,10 @@
             </div>
           `;
 
-          const arrowIcon = L.divIcon({ className: "", html: arrowHtml });
+          const arrowIcon = L.divIcon({
+            className: "",
+            html: arrowHtml,
+          });
 
           L.marker([point.lat, point.lon], { icon: arrowIcon })
             .addTo(map)
@@ -94,32 +94,33 @@
         });
       });
 
-    // 判断点是否在多边形内
-    function isPointInPolygon(point, polygonLatLngs) {
-      const x = point[1], y = point[0];
-      let inside = false;
-      for (let i = 0, j = polygonLatLngs.length - 1; i < polygonLatLngs.length; j = i++) {
-        const xi = polygonLatLngs[i].lat, yi = polygonLatLngs[i].lng;
-        const xj = polygonLatLngs[j].lat, yj = polygonLatLngs[j].lng;
-        const intersect = ((yi > y) !== (yj > y)) &&
-                          (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
-        if (intersect) inside = !inside;
-      }
-      return inside;
-    }
-
-    // 响应用户完成绘制多边形事件
     map.on(L.Draw.Event.CREATED, function (e) {
       const layer = e.layer;
       drawnItems.addLayer(layer);
 
-      const polygon = layer.getLatLngs()[0];
+      const polygon = layer.getLatLngs()[0]; // 多边形坐标数组
+
+      // 点是否在多边形内判断函数（Ray-casting）
+      function isPointInPolygon(point, polygonLatLngs) {
+        const x = point.lon;
+        const y = point.lat;
+        let inside = false;
+        for (let i = 0, j = polygonLatLngs.length - 1; i < polygonLatLngs.length; j = i++) {
+          const xi = polygonLatLngs[i].lat, yi = polygonLatLngs[i].lng;
+          const xj = polygonLatLngs[j].lat, yj = polygonLatLngs[j].lng;
+          const intersect = ((yi > y) !== (yj > y)) &&
+                            (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+          if (intersect) inside = !inside;
+        }
+        return inside;
+      }
+
       const selectedPoints = allData.filter(point =>
-        isPointInPolygon([point.lat, point.lon], polygon)
+        isPointInPolygon(point, polygon)
       );
 
-      console.log("✅ 选中点：", selectedPoints);
-      alert(`选中了 ${selectedPoints.length} 个点（控制台查看数据）`);
+      console.log("✅ 选中的点：", selectedPoints);
+      alert(`✅ 选中了 ${selectedPoints.length} 个点（详情见控制台）`);
     });
   </script>
 </body>
