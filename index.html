@@ -16,17 +16,35 @@
     #map {
       height: 100vh;
     }
+    #download-buttons {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: white;
+      padding: 10px;
+      z-index: 1000;
+      box-shadow: 0 0 5px rgba(0,0,0,0.4);
+    }
+    button {
+      margin-top: 5px;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="download-buttons" style="display:none;">
+    <strong>导出选中点:</strong><br>
+    <button onclick="downloadJSON()">导出为 JSON</button>
+    <button onclick="downloadCSV()">导出为 CSV</button>
+  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <script src="https://unpkg.com/leaflet-pip@latest/leaflet-pip.min.js"></script>
 
   <script>
     const map = L.map("map").setView([30, 100], 4);
-
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
@@ -35,9 +53,7 @@
     map.addLayer(drawnItems);
 
     const drawControl = new L.Control.Draw({
-      edit: {
-        featureGroup: drawnItems,
-      },
+      edit: { featureGroup: drawnItems },
       draw: {
         polygon: true,
         marker: false,
@@ -50,17 +66,17 @@
     map.addControl(drawControl);
 
     let allData = [];
+    let selectedPoints = [];
 
     fetch("data/velocity.json")
-      .then((response) => response.json())
+      .then((res) => res.json())
       .then((velocityData) => {
         allData = velocityData;
 
         velocityData.forEach((point) => {
           const angle = (Math.atan2(point.vy, point.vx) * 180) / Math.PI;
           const magnitude = Math.sqrt(point.vx ** 2 + point.vy ** 2);
-
-          const scale = 2; // 调整箭头长度比例
+          const scale = 2;
           const length = magnitude * scale;
 
           const arrowHtml = `
@@ -83,10 +99,7 @@
             </div>
           `;
 
-          const arrowIcon = L.divIcon({
-            className: "",
-            html: arrowHtml,
-          });
+          const arrowIcon = L.divIcon({ className: "", html: arrowHtml });
 
           L.marker([point.lat, point.lon], { icon: arrowIcon })
             .addTo(map)
@@ -96,32 +109,59 @@
 
     map.on(L.Draw.Event.CREATED, function (e) {
       const layer = e.layer;
+      drawnItems.clearLayers();  // 只保留一个多边形
       drawnItems.addLayer(layer);
 
-      const polygon = layer.getLatLngs()[0]; // 多边形坐标数组
+      selectedPoints = [];
 
-      // 点是否在多边形内判断函数（Ray-casting）
-      function isPointInPolygon(point, polygonLatLngs) {
-        const x = point.lon;
-        const y = point.lat;
-        let inside = false;
-        for (let i = 0, j = polygonLatLngs.length - 1; i < polygonLatLngs.length; j = i++) {
-          const xi = polygonLatLngs[i].lat, yi = polygonLatLngs[i].lng;
-          const xj = polygonLatLngs[j].lat, yj = polygonLatLngs[j].lng;
-          const intersect = ((yi > y) !== (yj > y)) &&
-                            (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
-          if (intersect) inside = !inside;
-        }
-        return inside;
-      }
-
-      const selectedPoints = allData.filter(point =>
-        isPointInPolygon(point, polygon)
-      );
+      allData.forEach((point) => {
+        const latlng = L.latLng(point.lat, point.lon);
+        const inside = leafletPip.pointInLayer(latlng, layer).length > 0;
+        if (inside) selectedPoints.push(point);
+      });
 
       console.log("✅ 选中的点：", selectedPoints);
       alert(`✅ 选中了 ${selectedPoints.length} 个点（详情见控制台）`);
+
+      // 显示导出按钮
+      document.getElementById("download-buttons").style.display = "block";
     });
+
+    // 导出为 JSON 文件
+    function downloadJSON() {
+      const blob = new Blob([JSON.stringify(selectedPoints, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "selected_velocity.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 导出为 CSV 文件
+    function downloadCSV() {
+      if (selectedPoints.length === 0) return;
+
+      const header = Object.keys(selectedPoints[0]).join(",") + "\n";
+      const rows = selectedPoints
+        .map((row) =>
+          Object.values(row)
+            .map((val) => `"${val}"`)
+            .join(",")
+        )
+        .join("\n");
+
+      const csvContent = header + rows;
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "selected_velocity.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   </script>
 </body>
 </html>
