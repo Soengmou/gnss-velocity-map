@@ -1,18 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GNSS Velocity Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
   <style>
-    #map { height: 100vh; }
-    .arrow {
-      display: block;
-      width: 0; height: 0;
-      border: 10px solid transparent;
-      border-bottom: 20px solid red;
-      transform-origin: center;
+    #map {
+      height: 100vh;
     }
   </style>
 </head>
@@ -20,22 +18,44 @@
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // 初始化地图
-    const map = L.map('map').setView([40, 75], 4);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+    const map = L.map("map").setView([40, 75], 4);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
-    // 从 data/velocity.json 读取速度场数据
-    fetch('data/velocity.json')
-      .then(response => response.json())
-      .then(velocityData => {
-        velocityData.forEach(point => {
-          const angle = Math.atan2(point.vy, point.vx) * 180 / Math.PI;
+    fetch("data/velocity.json")
+      .then((response) => response.json())
+      .then((velocityData) => {
+        velocityData.forEach((point) => {
+          const angle = (Math.atan2(point.vy, point.vx) * 180) / Math.PI;
+          const magnitude = Math.sqrt(point.vx ** 2 + point.vy ** 2);
+
+          const scale = 2; // 速度放大比例，可调
+          const length = magnitude * scale;
+
+          const arrowHtml = `
+            <div style="
+              width: 2px;
+              height: ${length}px;
+              background: red;
+              transform: rotate(${angle}deg);
+              transform-origin: bottom center;
+              position: relative;
+            ">
+              <div style="
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-bottom: 10px solid red;
+                position: absolute;
+                bottom: 100%; left: -4px;
+              "></div>
+            </div>
+          `;
 
           const arrowIcon = L.divIcon({
-            className: '',
-            html: `<div class="arrow" style="transform: rotate(${angle}deg);"></div>`
+            className: "",
+            html: arrowHtml,
           });
 
           L.marker([point.lat, point.lon], { icon: arrowIcon })
