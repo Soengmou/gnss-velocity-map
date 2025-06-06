@@ -1,13 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>GNSS Velocity Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <title>GNSS Velocity Map + Fault Lines</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"
+  />
   <style>
-    #map { height: 100vh; }
+    #map {
+      height: 100vh;
+    }
     .info-box-bottom {
       position: fixed;
       bottom: 20px;
@@ -15,7 +23,7 @@
       background: white;
       padding: 12px;
       border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
       z-index: 999;
       font-size: 14px;
       display: flex;
@@ -25,7 +33,7 @@
     }
     #downloadBtn {
       padding: 6px 12px;
-      background-color: #4CAF50;
+      background-color: #4caf50;
       color: white;
       border: none;
       border-radius: 4px;
@@ -47,12 +55,15 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
   <script>
-    const map = L.map("map").setView([30, 100], 4);
+    const map = L.map("map").setView([35, 120], 6);
 
-    // 添加底图
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}", {
-      attribution: "&copy; Esri"
-    }).addTo(map);
+    // 底图
+    L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "&copy; Esri",
+      }
+    ).addTo(map);
 
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
@@ -61,128 +72,127 @@
       edit: {
         featureGroup: drawnItems,
         edit: false,
-        remove: true
+        remove: true,
       },
       draw: {
         polygon: {
           allowIntersection: false,
           showArea: true,
-          shapeOptions: { color: 'purple' },
+          shapeOptions: {
+            color: "purple",
+          },
           drawError: {
-            color: 'red',
-            message: '<strong>⚠️ 多边形不能自相交！</strong>'
-          }
+            color: "red",
+            message: "<strong>⚠️ 多边形不能自相交！</strong>",
+          },
         },
-        polyline: { shapeOptions: { color: 'blue' } },
+        polyline: {
+          shapeOptions: {
+            color: "blue",
+          },
+        },
         rectangle: false,
         circle: false,
         marker: false,
-        circlemarker: false
-      }
+        circlemarker: false,
+      },
     });
     map.addControl(drawControl);
 
-    let velocityData = [];
+    let velocityData = []; // 如果有速度数据，可加载
     let selectedData = [];
     let polygonCoords = null;
     let lineCoords = null;
 
-    // 加载 velocity 数据并绘制箭头
-    fetch("data/velocity.json")
-      .then(response => response.json())
-      .then(data => {
-        velocityData = data;
+    // 断层线绘制函数
+    function drawFaultLines(faultData) {
+      faultData.forEach((segment) => {
+        // 转换为 [lat, lon]
+        const latlngs = segment.map(([lon, lat]) => [lat, lon]);
+        L.polyline(latlngs, {
+          color: "orange",
+          weight: 3,
+          opacity: 0.9,
+        }).addTo(map);
+      });
+    }
 
-        velocityData.forEach(point => {
-          const angle = (Math.atan2(point.vy, point.vx) * 180) / Math.PI;
-          const magnitude = Math.sqrt(point.vx ** 2 + point.vy ** 2);
-          const scale = 2;
-          const length = magnitude * scale;
-
-          const arrowHtml = `
-            <div style="
-              width: 2px;
-              height: ${length}px;
-              background: red;
-              transform: rotate(${angle}deg);
-              transform-origin: bottom center;
-              position: relative;
-            ">
-              <div style="
-                width: 0; height: 0;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-bottom: 10px solid red;
-                position: absolute;
-                bottom: 100%; left: -4px;
-              "></div>
-            </div>
-          `;
-          const arrowIcon = L.divIcon({ className: "", html: arrowHtml });
-
-          L.marker([point.lat, point.lon], { icon: arrowIcon })
-            .addTo(map)
-            .bindPopup(`📍 ${point.name || '站点'}<br>Vx: ${point.vx} mm/yr<br>Vy: ${point.vy} mm/yr`);
-        });
+    // 加载 fault.json
+    fetch("data/fault.json")
+      .then((response) => response.json())
+      .then((faultData) => {
+        drawFaultLines(faultData);
+      })
+      .catch((error) => {
+        console.error("加载 fault.json 失败:", error);
       });
 
-    // 点是否在多边形中
+    // 简单点选多边形内数据函数（示例，需结合你的velocityData）
     function pointInPolygon(point, polygon) {
-      let x = point[0], y = point[1];
+      let x = point[0],
+        y = point[1];
       let inside = false;
       for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-        let xi = polygon[i][0], yi = polygon[i][1];
-        let xj = polygon[j][0], yj = polygon[j][1];
-        let intersect = ((yi > y) !== (yj > y)) &&
-          (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+        let xi = polygon[i][0],
+          yi = polygon[i][1];
+        let xj = polygon[j][0],
+          yj = polygon[j][1];
+
+        let intersect =
+          yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
         if (intersect) inside = !inside;
       }
       return inside;
     }
 
-    // 处理绘图事件
     map.on(L.Draw.Event.CREATED, function (event) {
       const layer = event.layer;
       drawnItems.addLayer(layer);
+
       const type = event.layerType;
 
       if (type === "polygon") {
         const latlngs = layer.getLatLngs()[0];
-        polygonCoords = latlngs.map(p => [p.lng, p.lat]);
+        polygonCoords = latlngs.map((p) => [p.lng, p.lat]);
 
-        selectedData = velocityData.filter((pt) =>
-          pointInPolygon([pt.lon, pt.lat], polygonCoords)
-        );
+        // 如果有速度数据，可以筛选
+        // selectedData = velocityData.filter((pt) =>
+        //   pointInPolygon([pt.lon, pt.lat], polygonCoords)
+        // );
       }
 
       if (type === "polyline") {
         const latlngs = layer.getLatLngs();
         if (latlngs.length >= 2) {
-          lineCoords = [latlngs[0], latlngs[latlngs.length - 1]].map(p => [p.lng, p.lat]);
+          lineCoords = [latlngs[0], latlngs[latlngs.length - 1]].map((p) => [
+            p.lng,
+            p.lat,
+          ]);
         }
       }
 
       const infoText = document.getElementById("info-text");
       const downloadBtn = document.getElementById("downloadBtn");
 
-      const polyText = polygonCoords ? `✅ 多边形顶点 ${polygonCoords.length} 个` : '';
-      const lineText = lineCoords ? `✅ 线段已绘制` : '';
-      const selectedText = selectedData.length > 0 ? `✅ 框选点 ${selectedData.length} 个` : '';
+      const polyText = polygonCoords
+        ? `✅ 多边形顶点 ${polygonCoords.length} 个`
+        : "";
+      const lineText = lineCoords ? `✅ 线段已绘制` : "";
+      const selectedText = selectedData.length > 0 ? `✅ 框选点 ${selectedData.length} 个` : "";
 
       infoText.textContent = [polyText, lineText, selectedText].filter(Boolean).join("，");
       downloadBtn.disabled = !(polygonCoords || lineCoords);
     });
 
-    // 下载按钮逻辑
     document.getElementById("downloadBtn").addEventListener("click", () => {
       const exportObj = {
         polygonCoordinates: polygonCoords || [],
         lineCoordinates: lineCoords || [],
-        selectedPoints: selectedData || []
+        selectedPoints: selectedData || [],
       };
 
       const blob = new Blob([JSON.stringify(exportObj, null, 2)], {
-        type: "application/json"
+        type: "application/json",
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -191,24 +201,6 @@
       a.click();
       URL.revokeObjectURL(url);
     });
-
-    // 加载并绘制 fault.json（断层线）
-    fetch("data/fault.json")
-      .then(response => response.json())
-      .then(faultData => {
-        faultData.forEach(segment => {
-          const latlngs = segment.map(([lon, lat]) => [lat, lon]);
-          L.polyline(latlngs, {
-            color: "orange",
-            weight: 2,
-            opacity: 0.9
-          }).addTo(map);
-        });
-        console.log("✅ 断层线加载成功，共", faultData.length, "条");
-      })
-      .catch(error => {
-        console.error("❌ 加载 fault.json 失败:", error);
-      });
   </script>
 </body>
 </html>
