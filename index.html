@@ -118,13 +118,13 @@
     }
 
     // 加载 fault.json
-    fetch("data/fault.json")
+    fetch("data/faults.json")
       .then((response) => response.json())
       .then((faultData) => {
         drawFaultLines(faultData);
       })
       .catch((error) => {
-        console.error("加载 fault.json 失败:", error);
+        console.error("加载 faults.json 失败:", error);
       });
 
     // 简单点选多边形内数据函数（示例，需结合你的velocityData）
