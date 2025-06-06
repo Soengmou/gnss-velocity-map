@@ -8,7 +8,6 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
   <style>
     #map { height: 100vh; }
-
     .info-box-bottom {
       position: fixed;
       bottom: 20px;
@@ -24,7 +23,6 @@
       gap: 8px;
       align-items: flex-start;
     }
-
     #downloadBtn {
       padding: 6px 12px;
       background-color: #4CAF50;
@@ -33,7 +31,6 @@
       border-radius: 4px;
       cursor: pointer;
     }
-
     #downloadBtn:disabled {
       background-color: #ccc;
       cursor: not-allowed;
@@ -43,8 +40,8 @@
 <body>
   <div id="map"></div>
   <div class="info-box-bottom" id="info-box">
-    <div id="info-text">📌 双击或点击起点闭合多边形完成框选，也可绘制线段导出坐标</div>
-    <button id="downloadBtn" disabled>📥 下载选中数据和坐标</button>
+    <div id="info-text">📌 绘制多边形或线段后可导出相关数据</div>
+    <button id="downloadBtn" disabled>📥 下载 JSON</button>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -93,6 +90,8 @@
 
     let velocityData = [];
     let selectedData = [];
+    let polygonCoords = null;
+    let lineCoords = null;
 
     fetch("data/velocity.json")
       .then((response) => response.json())
@@ -139,6 +138,7 @@
       for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
         let xi = polygon[i][0], yi = polygon[i][1];
         let xj = polygon[j][0], yj = polygon[j][1];
+
         let intersect = ((yi > y) !== (yj > y)) &&
           (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
         if (intersect) inside = !inside;
@@ -148,56 +148,51 @@
 
     map.on(L.Draw.Event.CREATED, function (event) {
       const layer = event.layer;
-      drawnItems.clearLayers();
       drawnItems.addLayer(layer);
 
       const type = event.layerType;
+
+      if (type === "polygon") {
+        const latlngs = layer.getLatLngs()[0];
+        polygonCoords = latlngs.map(p => [p.lng, p.lat]);
+
+        selectedData = velocityData.filter((pt) =>
+          pointInPolygon([pt.lon, pt.lat], polygonCoords)
+        );
+      }
+
+      if (type === "polyline") {
+        const latlngs = layer.getLatLngs();
+        if (latlngs.length >= 2) {
+          lineCoords = [latlngs[0], latlngs[latlngs.length - 1]].map(p => [p.lng, p.lat]);
+        }
+      }
+
       const infoText = document.getElementById("info-text");
       const downloadBtn = document.getElementById("downloadBtn");
 
-      if (type === "polygon") {
-        const polygon = layer.getLatLngs()[0].map(p => [p.lng, p.lat]);
-        selectedData = velocityData.filter((pt) =>
-          pointInPolygon([pt.lon, pt.lat], polygon)
-        );
-        infoText.textContent = `✅ 选中了 ${selectedData.length} 个点，可下载 JSON 和多边形顶点`;
-        downloadBtn.disabled = selectedData.length === 0;
-        layer.feature = { geometry: { coordinates: polygon } };
-      } else if (type === "polyline") {
-        const latlngs = layer.getLatLngs().map(p => [p.lng, p.lat]);
-        if (latlngs.length === 2) {
-          layer.feature = { geometry: { coordinates: latlngs } };
-          infoText.textContent = `📏 已绘制一条线段，两点坐标已准备好，可下载`;
-          downloadBtn.disabled = false;
-          selectedData = [];
-        } else {
-          infoText.textContent = `⚠️ 线段必须仅包含两个端点`;
-          downloadBtn.disabled = true;
-        }
-      }
+      const polyText = polygonCoords ? `✅ 多边形顶点 ${polygonCoords.length} 个` : '';
+      const lineText = lineCoords ? `✅ 线段已绘制` : '';
+      const selectedText = selectedData.length > 0 ? `✅ 框选点 ${selectedData.length} 个` : '';
+
+      infoText.textContent = [polyText, lineText, selectedText].filter(Boolean).join("，");
+      downloadBtn.disabled = !(polygonCoords || lineCoords);
     });
 
     document.getElementById("downloadBtn").addEventListener("click", () => {
-      const layers = drawnItems.getLayers();
-      if (layers.length === 0) return;
-
-      const layer = layers[0];
-      const geometry = layer.feature?.geometry;
-
-      const output = {
-        selectedPoints: selectedData,
-        drawnGeometry: geometry ? geometry.coordinates : null,
-        geometryType: layer instanceof L.Polygon ? "polygon" :
-                      layer instanceof L.Polyline ? "polyline" : "unknown"
+      const exportObj = {
+        polygonCoordinates: polygonCoords || [],
+        lineCoordinates: lineCoords || [],
+        selectedPoints: selectedData || []
       };
 
-      const blob = new Blob([JSON.stringify(output, null, 2)], {
+      const blob = new Blob([JSON.stringify(exportObj, null, 2)], {
         type: "application/json"
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "drawn_and_selected_data.json";
+      a.download = "exported_data.json";
       a.click();
       URL.revokeObjectURL(url);
     });
