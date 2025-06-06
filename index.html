@@ -1,0 +1,127 @@
+<script>
+  const map = L.map("map").setView([30, 100], 4);
+
+  // 更改为高程影像图服务
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "&copy; <a href='https://www.esri.com/en-us/arcgis/products/esri-world-imagery'>Esri</a>"
+  }).addTo(map);
+
+  const drawnItems = new L.FeatureGroup();
+  map.addLayer(drawnItems);
+
+  const drawControl = new L.Control.Draw({
+    edit: {
+      featureGroup: drawnItems,
+      edit: false,
+      remove: true
+    },
+    draw: {
+      polygon: {
+        allowIntersection: false,
+        showArea: true,
+        shapeOptions: {
+          color: 'purple'
+        },
+        drawError: {
+          color: 'red',
+          message: '<strong>⚠️ 多边形不能自相交！</strong>'
+        }
+      },
+      rectangle: false,
+      polyline: false,
+      circle: false,
+      marker: false,
+      circlemarker: false
+    }
+  });
+  map.addControl(drawControl);
+
+  let velocityData = [];
+  let selectedData = [];
+
+  fetch("data/velocity.json")
+    .then((response) => response.json())
+    .then((data) => {
+      velocityData = data;
+
+      velocityData.forEach((point) => {
+        const angle = (Math.atan2(point.vy, point.vx) * 180) / Math.PI;
+        const magnitude = Math.sqrt(point.vx ** 2 + point.vy ** 2);
+        const scale = 2;
+        const length = magnitude * scale;
+
+        const arrowHtml = `
+          <div style="
+            width: 2px;
+            height: ${length}px;
+            background: red;
+            transform: rotate(${angle}deg);
+            transform-origin: bottom center;
+            position: relative;
+          ">
+            <div style="
+              width: 0; height: 0;
+              border-left: 5px solid transparent;
+              border-right: 5px solid transparent;
+              border-bottom: 10px solid red;
+              position: absolute;
+              bottom: 100%; left: -4px;
+            "></div>
+          </div>
+        `;
+
+        const arrowIcon = L.divIcon({ className: "", html: arrowHtml });
+
+        L.marker([point.lat, point.lon], { icon: arrowIcon })
+          .addTo(map)
+          .bindPopup(`Vx: ${point.vx}, Vy: ${point.vy}`);
+      });
+    });
+
+  function pointInPolygon(point, polygon) {
+    let x = point[0], y = point[1];
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      let xi = polygon[i][0], yi = polygon[i][1];
+      let xj = polygon[j][0], yj = polygon[j][1];
+
+      let intersect = ((yi > y) !== (yj > y)) &&
+        (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
+  map.on(L.Draw.Event.CREATED, function (event) {
+    const layer = event.layer;
+    drawnItems.clearLayers();
+    drawnItems.addLayer(layer);
+
+    const polygon = layer.getLatLngs()[0].map(p => [p.lng, p.lat]);
+
+    selectedData = velocityData.filter((pt) =>
+      pointInPolygon([pt.lon, pt.lat], polygon)
+    );
+
+    console.log("✅ 选中了", selectedData.length, "个点");
+    console.log("📦 选中点数据：", selectedData);
+
+    const infoText = document.getElementById("info-text");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    infoText.textContent = `✅ 选中了 ${selectedData.length} 个点，可点击按钮下载 JSON`;
+    downloadBtn.disabled = selectedData.length === 0;
+  });
+
+  document.getElementById("downloadBtn").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(selectedData, null, 2)], {
+      type: "application/json"
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "selected_velocity_data.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
