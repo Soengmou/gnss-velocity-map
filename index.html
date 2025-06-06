@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GNSS Velocity Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+  <style>
+    #map { height: 100vh; }
+
+    .info-box-bottom {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      z-index: 999;
+      font-size: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    #downloadBtn {
+      padding: 6px 12px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    #downloadBtn:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="info-box-bottom" id="info-box">
+    <div id="info-text">📌 双击或点击起点闭合多边形完成框选，也可绘制线段导出坐标</div>
+    <button id="downloadBtn" disabled>📥 下载选中数据和坐标</button>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+  <script>
+    const map = L.map("map").setView([30, 100], 4);
+
+    // 底图
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "&copy; Esri"
+    }).addTo(map);
+
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    const drawControl = new L.Control.Draw({
+      edit: {
+        featureGroup: drawnItems,
+        edit: false,
+        remove: true
+      },
+      draw: {
+        polygon: {
+          allowIntersection: false,
+          showArea: true,
+          shapeOptions: {
+            color: 'purple'
+          },
+          drawError: {
+            color: 'red',
+            message: '<strong>⚠️ 多边形不能自相交！</strong>'
+          }
+        },
+        polyline: {
+          shapeOptions: {
+            color: 'blue'
+          }
+        },
+        rectangle: false,
+        circle: false,
+        marker: false,
+        circlemarker: false
+      }
+    });
+    map.addControl(drawControl);
+
+    let velocityData = [];
+    let selectedData = [];
+
+    fetch("data/velocity.json")
+      .then((response) => response.json())
+      .then((data) => {
+        velocityData = data;
+
+        velocityData.forEach((point) => {
+          const angle = (Math.atan2(point.vy, point.vx) * 180) / Math.PI;
+          const magnitude = Math.sqrt(point.vx ** 2 + point.vy ** 2);
+          const scale = 2;
+          const length = magnitude * scale;
+
+          const arrowHtml = `
+            <div style="
+              width: 2px;
+              height: ${length}px;
+              background: red;
+              transform: rotate(${angle}deg);
+              transform-origin: bottom center;
+              position: relative;
+            ">
+              <div style="
+                width: 0; height: 0;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-bottom: 10px solid red;
+                position: absolute;
+                bottom: 100%; left: -4px;
+              "></div>
+            </div>
+          `;
+
+          const arrowIcon = L.divIcon({ className: "", html: arrowHtml });
+
+          L.marker([point.lat, point.lon], { icon: arrowIcon })
+            .addTo(map)
+            .bindPopup(`📍 ${point.name || '站点'}<br>Vx: ${point.vx} mm/yr<br>Vy: ${point.vy} mm/yr`);
+        });
+      });
+
+    function pointInPolygon(point, polygon) {
+      let x = point[0], y = point[1];
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        let xi = polygon[i][0], yi = polygon[i][1];
+        let xj = polygon[j][0], yj = polygon[j][1];
+        let intersect = ((yi > y) !== (yj > y)) &&
+          (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    map.on(L.Draw.Event.CREATED, function (event) {
+      const layer = event.layer;
+      drawnItems.clearLayers();
+      drawnItems.addLayer(layer);
+
+      const type = event.layerType;
+      const infoText = document.getElementById("info-text");
+      const downloadBtn = document.getElementById("downloadBtn");
+
+      if (type === "polygon") {
+        const polygon = layer.getLatLngs()[0].map(p => [p.lng, p.lat]);
+        selectedData = velocityData.filter((pt) =>
+          pointInPolygon([pt.lon, pt.lat], polygon)
+        );
+        infoText.textContent = `✅ 选中了 ${selectedData.length} 个点，可下载 JSON 和多边形顶点`;
+        downloadBtn.disabled = selectedData.length === 0;
+        layer.feature = { geometry: { coordinates: polygon } };
+      } else if (type === "polyline") {
+        const latlngs = layer.getLatLngs().map(p => [p.lng, p.lat]);
+        if (latlngs.length === 2) {
+          layer.feature = { geometry: { coordinates: latlngs } };
+          infoText.textContent = `📏 已绘制一条线段，两点坐标已准备好，可下载`;
+          downloadBtn.disabled = false;
+          selectedData = [];
+        } else {
+          infoText.textContent = `⚠️ 线段必须仅包含两个端点`;
+          downloadBtn.disabled = true;
+        }
+      }
+    });
+
+    document.getElementById("downloadBtn").addEventListener("click", () => {
+      const layers = drawnItems.getLayers();
+      if (layers.length === 0) return;
+
+      const layer = layers[0];
+      const geometry = layer.feature?.geometry;
+
+      const output = {
+        selectedPoints: selectedData,
+        drawnGeometry: geometry ? geometry.coordinates : null,
+        geometryType: layer instanceof L.Polygon ? "polygon" :
+                      layer instanceof L.Polyline ? "polyline" : "unknown"
+      };
+
+      const blob = new Blob([JSON.stringify(output, null, 2)], {
+        type: "application/json"
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "drawn_and_selected_data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
