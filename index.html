@@ -56,8 +56,12 @@
     //L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
       //attribution: "&copy; Esri"
     //}).addTo(map);
-    L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-      attribution: "Map data: &copy; OpenTopoMap (CC-BY-SA)"
+    // 地形图漂亮但是带有行政区划
+    //L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+      //attribution: "Map data: &copy; OpenTopoMap (CC-BY-SA)"
+    //}).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "&copy; Esri"
     }).addTo(map);
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
